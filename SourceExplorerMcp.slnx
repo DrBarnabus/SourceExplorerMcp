@@ -1,0 +1,8 @@
+﻿<Solution>
+    <Folder Name="/src/">
+        <File Path="src\Directory.Build.props" />
+        <File Path="src\Directory.Packages.props" />
+        <Project Path="src/SourceExplorerMcp.Core/SourceExplorerMcp.Core.csproj" />
+        <Project Path="src/SourceExplorerMcp/SourceExplorerMcp.csproj" />
+    </Folder>
+</Solution>
