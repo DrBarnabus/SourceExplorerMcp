@@ -5,12 +5,15 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+
+        <PackageId>SourceExplorerMcp</PackageId>
+        <PackageTags>decompilation;source-code;mcp;model-context-protocol;tool</PackageTags>
+        <Description>MCP tool to allow agents to decompile .NET assemblies</Description>
+
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>source-explorer-mcp</ToolCommandName>
     </PropertyGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\SourceExplorerMcp.Core\SourceExplorerMcp.Core.csproj" />
-    </ItemGroup>
-    
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Hosting" />
         <PackageReference Include="ModelContextProtocol" />
@@ -19,6 +22,14 @@
         <PackageReference Include="Serilog.Sinks.Console" />
         <PackageReference Include="Serilog.Sinks.Debug" />
         <PackageReference Include="Serilog.Sinks.File" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\SourceExplorerMcp.Core\SourceExplorerMcp.Core.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="/" />
     </ItemGroup>
 
 </Project>
