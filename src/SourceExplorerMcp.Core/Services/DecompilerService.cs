@@ -78,7 +78,7 @@ public sealed class DecompilerService(
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to decompile type by name, trying fallback approach: {TypeName}", typeInfo.Name);
+            _logger.LogWarning(ex, "Failed to decompile type by name, trying fallback approach: {TypeName}", typeInfo.FullName);
 
             try
             {

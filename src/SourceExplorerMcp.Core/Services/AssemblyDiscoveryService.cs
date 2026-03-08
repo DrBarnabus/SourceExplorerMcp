@@ -1,20 +1,16 @@
-﻿using System.Text.RegularExpressions;
-using Microsoft.Extensions.Caching.Memory;
+﻿using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using SourceExplorerMcp.Core.Models;
 
 namespace SourceExplorerMcp.Core.Services;
 
-public sealed partial class AssemblyDiscoveryService(
+public sealed class AssemblyDiscoveryService(
     ILogger<AssemblyDiscoveryService> logger,
     IProjectAssetsParser projectAssetsParser,
     IAssemblyMetadataExtractor assemblyMetadataExtractor,
     IMemoryCache cache)
     : IAssemblyDiscoveryService
 {
-    [GeneratedRegex(@"[/\\](net\d+\.\d+|netstandard\d+\.\d+|netcoreapp\d+\.\d+)[/\\]")]
-    private static partial Regex TargetFrameworkRegex { get; }
-
     private const string CacheKeyPrefix = "assemblies:";
 
     private readonly ILogger<AssemblyDiscoveryService> _logger = logger;
@@ -140,21 +136,12 @@ public sealed partial class AssemblyDiscoveryService(
                 package.Name,
                 metadata?.AssemblyName ?? assemblyNameWithoutExtension,
                 metadata?.Version ?? package.Version,
-                fileInfo.FullName,
-                metadata?.PublicKeyToken,
-                ExtractTargetFramework(assemblyPath),
-                fileInfo.LastWriteTimeUtc);
+                fileInfo.FullName);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error creating assembly info for {Path}", assemblyPath);
             return null;
-        }
-
-        static string? ExtractTargetFramework(string assemblyPath)
-        {
-            var match = TargetFrameworkRegex.Match(assemblyPath);
-            return match.Success ? match.Groups[1].Value : null;
         }
     }
 

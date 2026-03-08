@@ -1,7 +1,7 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -22,6 +22,28 @@ public sealed class TypeSearchService(
     private readonly IAssemblyDiscoveryService _assemblyDiscoveryService = assemblyDiscoveryService;
     private readonly IMemoryCache _cache = cache;
 
+    private enum TypeKind
+    {
+        Class,
+        Interface,
+        Struct,
+        Enum,
+        Delegate,
+        RecordClass,
+        Unknown
+    }
+
+    private enum TypeAccessibility
+    {
+        Public,
+        Internal,
+        Private,
+        Protected,
+        ProtectedInternal,
+        PrivateProtected,
+        Unknown
+    }
+
     public async Task<List<TypeInfo>> SearchTypesAsync(string basePath, string searchPattern, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
@@ -35,9 +57,9 @@ public sealed class TypeSearchService(
         var regex = WildcardToRegex(searchPattern);
 
         var matchingTypes = allTypes
-            .Where(t => regex.IsMatch(t.Name) || regex.IsMatch(t.FullName))
-            .OrderBy(t => t.Namespace ?? string.Empty)
-            .ThenBy(t => t.Name)
+            .Where(t => regex.IsMatch(GetSimpleName(t.FullName)) || regex.IsMatch(t.FullName))
+            .OrderBy(t => GetNamespace(t.FullName) ?? string.Empty)
+            .ThenBy(t => GetSimpleName(t.FullName))
             .ToList();
 
         _logger.LogInformation("Found {Count} types matching pattern '{Pattern}'", matchingTypes.Count, searchPattern);
@@ -73,7 +95,7 @@ public sealed class TypeSearchService(
 
         var allTypes = await Task.Run(() => ExtractTypesFromAssemblies(assemblies, cancellationToken), cancellationToken);
 
-        _cache.Set(cacheKey, assemblies);
+        _cache.Set(cacheKey, allTypes);
 
         _logger.LogInformation("Indexed {Count} types from {AssemblyCount} assemblies", allTypes.Count, assemblies.Count);
         return allTypes;
@@ -124,7 +146,7 @@ public sealed class TypeSearchService(
                     if (IsCompilerGenerated(name))
                         continue;
 
-                    var typeInfo = CreateTypeInfo(typeDefinition, typeDefinitionHandle, metadataReader, assembly);
+                    var typeInfo = CreateTypeInfo(typeDefinition, metadataReader, assembly);
                     if (typeInfo is not null)
                         types.Add(typeInfo);
                 }
@@ -148,7 +170,6 @@ public sealed class TypeSearchService(
 
     private TypeInfo? CreateTypeInfo(
         TypeDefinition typeDefinition,
-        TypeDefinitionHandle typeDefinitionHandle,
         MetadataReader metadataReader,
         AssemblyInfo assembly)
     {
@@ -158,7 +179,7 @@ public sealed class TypeSearchService(
             string? namespaceName = typeDefinition.Namespace.IsNil ? null : metadataReader.GetString(typeDefinition.Namespace);
             string fullName = string.IsNullOrEmpty(namespaceName) ? name : $"{namespaceName}.{name}";
             var attributes = typeDefinition.Attributes;
-            var typeKind = DetermineTypeKind(typeDefinition, metadataReader);
+            var kind = DetermineTypeKind(typeDefinition, metadataReader);
             var accessibility = DetermineAccessibility(attributes);
 
             var genericParams = typeDefinition.GetGenericParameters()
@@ -166,50 +187,17 @@ public sealed class TypeSearchService(
                 .Select(gp => metadataReader.GetString(gp.Name))
                 .ToList();
 
-            string? baseType = null;
-            if (!typeDefinition.BaseType.IsNil)
-            {
-                baseType = GetTypeName(typeDefinition.BaseType, metadataReader);
-            }
+            bool isAbstract = (attributes & TypeAttributes.Abstract) != 0 && kind != TypeKind.Interface;
+            bool isSealed = (attributes & TypeAttributes.Sealed) != 0 && kind != TypeKind.Enum;
+            bool isStatic = isAbstract && isSealed;
 
-            var interfaces = typeDefinition.GetInterfaceImplementations()
-                .Select(metadataReader.GetInterfaceImplementation)
-                .Select(ii => GetTypeName(ii.Interface, metadataReader))
-                .Where(n => n != null)
-                .Cast<string>()
-                .ToList();
-
-            bool isNested = typeDefinition.IsNested;
-            string? declaringType = null;
-            if (isNested && !typeDefinition.GetDeclaringType().IsNil)
-            {
-                var declaringTypeDef = metadataReader.GetTypeDefinition(typeDefinition.GetDeclaringType());
-                string declaringTypeName = metadataReader.GetString(declaringTypeDef.Name);
-                string? declaringTypeNamespace = declaringTypeDef.Namespace.IsNil ? null : metadataReader.GetString(declaringTypeDef.Namespace);
-                declaringType = string.IsNullOrEmpty(declaringTypeNamespace)
-                    ? declaringTypeName
-                    : $"{declaringTypeNamespace}.{declaringTypeName}";
-            }
+            string declaration = BuildDeclaration(name, genericParams, kind, accessibility, isAbstract, isSealed, isStatic);
 
             return new TypeInfo
             {
-                Name = name,
                 FullName = fullName,
-                Namespace = namespaceName,
                 Assembly = assembly,
-                Kind = typeKind,
-                Accessibility = accessibility,
-                IsAbstract = (attributes & TypeAttributes.Abstract) != 0 && typeKind != TypeKind.Interface,
-                IsSealed = (attributes & TypeAttributes.Sealed) != 0 && typeKind != TypeKind.Enum,
-                IsStatic = (attributes & TypeAttributes.Abstract) != 0 && (attributes & TypeAttributes.Sealed) != 0,
-                IsGeneric = genericParams.Count > 0,
-                GenericParameterCount = genericParams.Count,
-                GenericParameters = genericParams,
-                BaseType = baseType,
-                Interfaces = interfaces,
-                IsNested = isNested,
-                DeclaringType = declaringType,
-                MetadataToken = metadataReader.GetToken(typeDefinitionHandle)
+                Declaration = declaration
             };
         }
         catch (Exception ex)
@@ -217,6 +205,65 @@ public sealed class TypeSearchService(
             _logger.LogDebug(ex, "Error creating type info");
             return null;
         }
+    }
+
+    private static string BuildDeclaration(
+        string name,
+        List<string> genericParams,
+        TypeKind kind,
+        TypeAccessibility accessibility,
+        bool isAbstract,
+        bool isSealed,
+        bool isStatic)
+    {
+        var sb = new StringBuilder();
+
+        sb.Append(accessibility switch
+        {
+            TypeAccessibility.Public => "public",
+            TypeAccessibility.Internal => "internal",
+            TypeAccessibility.Private => "private",
+            TypeAccessibility.Protected => "protected",
+            TypeAccessibility.ProtectedInternal => "protected internal",
+            TypeAccessibility.PrivateProtected => "private protected",
+            _ => "internal"
+        });
+
+        if (isStatic && kind is TypeKind.Class or TypeKind.RecordClass)
+        {
+            sb.Append(" static");
+        }
+        else
+        {
+            if (isAbstract && kind is TypeKind.Class or TypeKind.RecordClass)
+                sb.Append(" abstract");
+            if (isSealed && kind is TypeKind.Class or TypeKind.RecordClass)
+                sb.Append(" sealed");
+        }
+
+        sb.Append(kind switch
+        {
+            TypeKind.Interface => " interface",
+            TypeKind.Struct => " struct",
+            TypeKind.Enum => " enum",
+            TypeKind.Delegate => " delegate",
+            TypeKind.RecordClass => " record class",
+            _ => " class"
+        });
+
+        sb.Append(' ');
+
+        int backtickIndex = name.IndexOf('`');
+        sb.Append(backtickIndex >= 0 ? name[..backtickIndex] : name);
+
+        if (genericParams.Count > 0)
+        {
+            sb.Append('<');
+            sb.Append(string.Join(", ", genericParams));
+            sb.Append('>');
+        }
+
+        return sb.ToString();
     }
 
     private static TypeKind DetermineTypeKind(TypeDefinition typeDefinition, MetadataReader metadataReader)
@@ -235,17 +282,27 @@ public sealed class TypeSearchService(
                 case "System.MulticastDelegate":
                 case "System.Delegate":
                     return TypeKind.Delegate;
+                case "System.ValueType":
+                    return TypeKind.Struct;
             }
         }
 
-        if (((attributes & TypeAttributes.SequentialLayout) != 0 || (attributes & TypeAttributes.ExplicitLayout) != 0) && !typeDefinition.BaseType.IsNil)
-        {
-            string? baseTypeName = GetTypeName(typeDefinition.BaseType, metadataReader);
-            if (baseTypeName == "System.ValueType")
-                return TypeKind.Struct;
-        }
+        if (IsRecordType(typeDefinition, metadataReader))
+            return TypeKind.RecordClass;
 
         return TypeKind.Class;
+    }
+
+    private static bool IsRecordType(TypeDefinition typeDefinition, MetadataReader metadataReader)
+    {
+        foreach (var methodHandle in typeDefinition.GetMethods())
+        {
+            var method = metadataReader.GetMethodDefinition(methodHandle);
+            if (metadataReader.GetString(method.Name) == "<Clone>$")
+                return true;
+        }
+
+        return false;
     }
 
     private static TypeAccessibility DetermineAccessibility(TypeAttributes attributes)
@@ -294,6 +351,18 @@ public sealed class TypeSearchService(
         }
     }
 
+    private static string GetSimpleName(string fullName)
+    {
+        int lastDot = fullName.LastIndexOf('.');
+        return lastDot >= 0 ? fullName[(lastDot + 1)..] : fullName;
+    }
+
+    private static string? GetNamespace(string fullName)
+    {
+        int lastDot = fullName.LastIndexOf('.');
+        return lastDot >= 0 ? fullName[..lastDot] : null;
+    }
+
     private static bool IsCompilerGenerated(string typeName) =>
         typeName.StartsWith('<') || typeName.Contains("<>") || typeName.StartsWith("__") || typeName == "<Module>";
 
@@ -304,8 +373,8 @@ public sealed class TypeSearchService(
         return new Regex($"^{escaped}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     }
 
-    private static string GetCacheKey(string normalizedPath)
+    private static string GetCacheKey(string normalisedPath)
     {
-        return $"{CacheKeyPrefix}{normalizedPath}";
+        return $"{CacheKeyPrefix}{normalisedPath}";
     }
 }

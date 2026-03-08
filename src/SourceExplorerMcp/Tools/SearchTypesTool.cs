@@ -23,7 +23,7 @@ public sealed class SearchTypesTool(
         _logger.LogInformation("Searching types in assemblies from {Path}", basePath);
 
         var matchingTypes = await _typeSearchService.SearchTypesAsync(basePath, input.SearchPattern, cancellationToken);
-        return new SearchTypesOutput(matchingTypes);
+        return new SearchTypesOutput(matchingTypes.Select(TypeSummary.FromTypeInfo).ToList());
     }
 }
 
@@ -36,4 +36,4 @@ public sealed record SearchTypesInput
     public string? ProjectBasePath { get; init; }
 }
 
-public sealed record SearchTypesOutput(List<TypeInfo> Types);
+public sealed record SearchTypesOutput(List<TypeSummary> Types);

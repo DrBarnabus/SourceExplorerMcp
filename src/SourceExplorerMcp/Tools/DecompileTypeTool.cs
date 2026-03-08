@@ -52,7 +52,7 @@ public sealed class DecompileTypeTool(
         {
             return new DecompileTypeOutput
             {
-                Type = result.Type,
+                Type = TypeSummary.FromTypeInfo(result.Type),
                 Source = new DecompiledSource
                 {
                     Content = sourceCode,
@@ -65,7 +65,7 @@ public sealed class DecompileTypeTool(
         var filePath = WriteToTempFile(result.FullTypeName, sourceCode);
         return new DecompileTypeOutput
         {
-            Type = result.Type,
+            Type = TypeSummary.FromTypeInfo(result.Type),
             Source = new DecompiledSource
             {
                 FilePath = filePath,
@@ -141,7 +141,7 @@ public sealed record DecompileTypeInput
 public sealed record DecompileTypeOutput
 {
     [Description("Type metadata, or null if not found.")]
-    public TypeInfo? Type { get; init; }
+    public TypeSummary? Type { get; init; }
 
     [Description("Decompiled source, or null if not found.")]
     public DecompiledSource? Source { get; init; }
