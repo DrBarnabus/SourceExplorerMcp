@@ -14,7 +14,7 @@ public sealed class SearchTypesTool(
     private readonly ILogger<SearchTypesTool> _logger = logger;
     private readonly ITypeSearchService _typeSearchService = typeSearchService;
 
-    [McpServerTool(Name = "search-types"), Description("Quickly find .NET types across all packages in your project using wildcard patterns. Use when you: don't know the exact namespace of a type (e.g., '*HttpClient*', '*JsonConverter*'), want to discover what types are available in a package, need to find all implementations or related types (e.g., '*Exception', '*Attribute'), or are exploring unfamiliar NuGet packages. Supports * for any characters and ? for single character matching against both simple names and full names (including namespaces).")]
+    [McpServerTool(Name = "search-types"), Description("Search for .NET types across all assemblies in the project's dependency graph using wildcard patterns. Only works with .NET projects. Searches all types regardless of visibility. Does not search the project's own source code. Use the FullName from results as the FullName parameter of decompile-type to view source code.")]
     public async Task<SearchTypesOutput> SearchTypes(
         SearchTypesInput input,
         CancellationToken cancellationToken = default)
@@ -29,10 +29,10 @@ public sealed class SearchTypesTool(
 
 public sealed record SearchTypesInput
 {
-    [Description("Wildcard pattern to match type names (case-insensitive). Use * for any characters, ? for single character. Matches against both simple names and full names (including namespaces).")]
+    [Description("Wildcard pattern to match type names (case-insensitive). * matches any characters, ? matches a single character. Matches against simple names (e.g. '*HttpClient*') and fully-qualified names (e.g. 'Microsoft.Extensions.*Options'). Prefer specific patterns to limit results.")]
     public required string SearchPattern { get; init; }
 
-    [Description("Optional project path override")]
+    [Description("Absolute path to the project or solution directory. Defaults to the current working directory if not provided.")]
     public string? ProjectBasePath { get; init; }
 }
 

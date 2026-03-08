@@ -15,13 +15,13 @@ public sealed class DecompileTypeTool(
     private readonly ILogger<DecompileTypeTool> _logger = logger;
     private readonly IDecompilerService _decompilerService = decompilerService;
 
-    [McpServerTool(Name = "decompile-type"), Description("Instantly view the source code of any .NET type - including third-party NuGet packages, framework types, and dependencies. Perfect when you need to: understand method signatures and parameter types you're unfamiliar with, see how a library actually implements something under the hood, debug issues with types you don't have source access to, discover available methods/properties on framework types, or understand extension methods and their implementations. Much faster than searching GitHub or reading documentation. Returns complete C# source code including all methods, properties, fields and nested types. Use this tool whenever you encounter an unfamiliar type or need to understand implementation details.")]
+    [McpServerTool(Name = "decompile-type"), Description("Decompile a .NET type from the project's dependency graph into C# source code. Only works with .NET projects. The type must exist in a NuGet package or framework assembly resolved by the project. Returns null when the type is not found. Use search-types first if you do not know the exact full type name.")]
     public async Task<DecompileTypeOutput> DecompileType(
         DecompileTypeInput input,
         CancellationToken cancellationToken = default)
     {
         string basePath = input.ProjectBasePath ?? Environment.CurrentDirectory;
-        _logger.LogInformation("Decompiling type '{FullTypeName}' in assemblies from {Path}", input.FullTypeName, basePath);
+        _logger.LogInformation("Decompiling type '{FullName}' in assemblies from {Path}", input.FullName, basePath);
 
         var options = new DecompilerOptions
         {
@@ -30,23 +30,23 @@ public sealed class DecompileTypeTool(
             LanguageVersion = LanguageVersion.Latest
         };
 
-        var result = await _decompilerService.DecompileTypeAsync(basePath, input.FullTypeName, options, cancellationToken);
+        var result = await _decompilerService.DecompileTypeAsync(basePath, input.FullName, options, cancellationToken);
         return new DecompileTypeOutput(result);
     }
 }
 
 public sealed record DecompileTypeInput
 {
-    [Description("Full name of the type to decompile, including namespace (e.g. 'System.String', 'System.Collections.Generic.List`1')")]
-    public required string FullTypeName { get; init; }
+    [Description("Fully-qualified type name including namespace (e.g. 'System.String', 'Microsoft.Extensions.Logging.ILogger'). For generic types, use backtick notation with arity (e.g. 'System.Collections.Generic.List`1'). For nested types, use + as separator (e.g. 'System.Environment+SpecialFolder').")]
+    public required string FullName { get; init; }
 
-    [Description("Include XML documentation comments in the output (default: true)")]
+    [Description("Include XML documentation comments in the decompiled output. Set to false to reduce output size when you only need the implementation. Defaults to true.")]
     public bool? IncludeXmlDocumentation { get; init; }
 
-    [Description("Show compiler-generated code like backing fields (default: false)")]
+    [Description("Include compiler-generated members such as backing fields, async state machines, and iterator implementations. Useful for understanding auto-properties, async methods, or yield-based iterators. Defaults to false.")]
     public bool? ShowCompilerGeneratedCode { get; init; }
 
-    [Description("Optional project path override")]
+    [Description("Absolute path to the project or solution directory. Defaults to the current working directory if not provided.")]
     public string? ProjectBasePath { get; init; }
 }
 
