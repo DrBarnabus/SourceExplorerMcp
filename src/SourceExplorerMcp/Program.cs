@@ -33,7 +33,6 @@ try
     builder.Services
         .AddMcpServer()
         .WithStdioServerTransport()
-        .WithTools<ListAssembliesTool>()
         .WithTools<SearchTypesTool>()
         .WithTools<DecompileTypeTool>();
 
