@@ -1,9 +1,10 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using ICSharpCode.Decompiler.CSharp;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using SourceExplorerMcp.Core.Models;
 using SourceExplorerMcp.Core.Services;
+using SourceExplorerMcp.Models;
 
 namespace SourceExplorerMcp.Tools;
 

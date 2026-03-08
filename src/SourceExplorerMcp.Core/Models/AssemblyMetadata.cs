@@ -1,4 +1,4 @@
-namespace SourceExplorerMcp.Core.Models;
+﻿namespace SourceExplorerMcp.Core.Models;
 
 public sealed record AssemblyMetadata(
     string AssemblyName,

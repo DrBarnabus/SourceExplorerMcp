@@ -1,4 +1,4 @@
-using System.Reflection.Metadata;
+﻿using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using Microsoft.Extensions.Logging;
 using SourceExplorerMcp.Core.Models;

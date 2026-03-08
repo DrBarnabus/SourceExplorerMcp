@@ -1,7 +1,7 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using SourceExplorerMcp.Core.Models;
 
-namespace SourceExplorerMcp.Tools;
+namespace SourceExplorerMcp.Models;
 
 public sealed record TypeSummary
 {

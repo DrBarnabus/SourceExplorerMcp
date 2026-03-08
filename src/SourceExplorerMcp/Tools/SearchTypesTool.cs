@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using SourceExplorerMcp.Core.Models;
 using SourceExplorerMcp.Core.Services;
+using SourceExplorerMcp.Models;
 
 namespace SourceExplorerMcp.Tools;
 
