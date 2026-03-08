@@ -73,7 +73,8 @@ public sealed class DecompilerService(
         try
         {
             var fullTypeName = new FullTypeName(typeInfo.FullName);
-            return decompiler.DecompileTypeAsString(fullTypeName);
+            var syntaxTree = decompiler.DecompileType(fullTypeName);
+            return ApplyDecompileMode(syntaxTree, options);
         }
         catch (Exception ex)
         {
@@ -86,7 +87,10 @@ public sealed class DecompilerService(
                 {
                     var typeDefinition = type.GetDefinition();
                     if (typeDefinition != null)
-                        return decompiler.DecompileTypeAsString(new FullTypeName(typeDefinition.FullName));
+                    {
+                        var syntaxTree = decompiler.DecompileType(new FullTypeName(typeDefinition.FullName));
+                        return ApplyDecompileMode(syntaxTree, options);
+                    }
                 }
 
                 throw new InvalidOperationException($"Could not find type '{typeInfo.FullName}' in assembly");
@@ -96,5 +100,16 @@ public sealed class DecompilerService(
                 throw new InvalidOperationException($"Failed to decompile type '{typeInfo.FullName}'. The type may be obfuscated, compiler-generated, or in an unsupported format.", innerException);
             }
         }
+    }
+
+    private static string ApplyDecompileMode(ICSharpCode.Decompiler.CSharp.Syntax.SyntaxTree syntaxTree, DecompilerOptions options)
+    {
+        if (options.DecompileMode == DecompileMode.Signatures)
+        {
+            var visitor = new SignatureOnlyVisitor();
+            syntaxTree.AcceptVisitor(visitor);
+        }
+
+        return syntaxTree.ToString();
     }
 }

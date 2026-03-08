@@ -9,4 +9,6 @@ public sealed record DecompilerOptions
     public bool ShowCompilerGeneratedCode { get; set; } = false;
 
     public LanguageVersion LanguageVersion { get; set; } = LanguageVersion.Latest;
+
+    public DecompileMode DecompileMode { get; set; } = DecompileMode.Full;
 }
