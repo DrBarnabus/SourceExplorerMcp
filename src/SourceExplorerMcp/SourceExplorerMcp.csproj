@@ -12,6 +12,9 @@
 
         <PackAsTool>true</PackAsTool>
         <ToolCommandName>source-explorer-mcp</ToolCommandName>
+
+        <PublishReadyToRun>true</PublishReadyToRun>
+        <RuntimeIdentifiers>linux-x64;linux-arm64;win-x64;win-arm64;osx-x64;osx-arm64;any</RuntimeIdentifiers>
     </PropertyGroup>
 
     <ItemGroup>
