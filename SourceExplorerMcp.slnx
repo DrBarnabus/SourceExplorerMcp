@@ -5,4 +5,7 @@
         <Project Path="src/SourceExplorerMcp.Core/SourceExplorerMcp.Core.csproj" />
         <Project Path="src/SourceExplorerMcp/SourceExplorerMcp.csproj" />
     </Folder>
+    <Folder Name="/tests/">
+        <Project Path="src/SourceExplorerMcp.Core.Tests/SourceExplorerMcp.Core.Tests.csproj" />
+    </Folder>
 </Solution>
