@@ -3,6 +3,14 @@
 All notable changes to this project will be automatically documented in this file.
 
 
+### [1.0.1](https://github.com/DrBarnabus/SourceExplorerMcp/compare/v1.0.0...v1.0.1) (2026-03-18)
+
+
+### Bug Fixes
+
+* deduplicate assemblies from multiple bin output directories ([0af68a4](https://github.com/DrBarnabus/SourceExplorerMcp/commit/0af68a43af0474eea621e5bd6982541cdc92cb28))
+* discover and resolve framework assemblies from the shared .NET runtime ([3845717](https://github.com/DrBarnabus/SourceExplorerMcp/commit/384571785170e49ed14280e8e637b9f15d777491))
+
 ## [1.0.0](https://github.com/DrBarnabus/SourceExplorerMcp/compare/v0.1.0...v1.0.0) (2026-03-08)
 
 
