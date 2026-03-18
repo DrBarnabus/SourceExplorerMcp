@@ -2,4 +2,4 @@
 
 public sealed record AssemblyMetadata(
     string AssemblyName,
-    string? Version);
+    string Version);

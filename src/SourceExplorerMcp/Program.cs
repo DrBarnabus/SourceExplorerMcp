@@ -26,6 +26,7 @@ try
 
     builder.Services.AddSingleton<IProjectAssetsParser, ProjectAssetsParser>();
     builder.Services.AddSingleton<IAssemblyMetadataExtractor, AssemblyMetadataExtractor>();
+    builder.Services.AddSingleton<IRuntimeAssemblyResolver, RuntimeAssemblyResolver>();
     builder.Services.AddSingleton<IAssemblyDiscoveryService, AssemblyDiscoveryService>();
     builder.Services.AddSingleton<ITypeSearchService, TypeSearchService>();
     builder.Services.AddSingleton<IDecompilerService, DecompilerService>();

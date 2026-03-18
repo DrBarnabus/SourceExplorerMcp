@@ -8,6 +8,7 @@ public sealed class AssemblyDiscoveryService(
     ILogger<AssemblyDiscoveryService> logger,
     IProjectAssetsParser projectAssetsParser,
     IAssemblyMetadataExtractor assemblyMetadataExtractor,
+    IRuntimeAssemblyResolver runtimeAssemblyResolver,
     IMemoryCache cache)
     : IAssemblyDiscoveryService
 {
@@ -16,6 +17,7 @@ public sealed class AssemblyDiscoveryService(
     private readonly ILogger<AssemblyDiscoveryService> _logger = logger;
     private readonly IProjectAssetsParser _projectAssetsParser = projectAssetsParser;
     private readonly IAssemblyMetadataExtractor _assemblyMetadataExtractor = assemblyMetadataExtractor;
+    private readonly IRuntimeAssemblyResolver _runtimeAssemblyResolver = runtimeAssemblyResolver;
     private readonly IMemoryCache _cache = cache;
 
     public async Task<List<AssemblyInfo>> DiscoverAssembliesAsync(string basePath, CancellationToken cancellationToken = default)
@@ -59,7 +61,7 @@ public sealed class AssemblyDiscoveryService(
 
             _logger.LogDebug("Found {Count} bin directories to search", searchPaths.Count);
 
-            var packageMappings = DiscoverProjectAssets(basePath);
+            var (packageMappings, frameworkReferences) = DiscoverProjectAssets(basePath);
 
             foreach (string searchPath in searchPaths)
             {
@@ -75,7 +77,7 @@ public sealed class AssemblyDiscoveryService(
                         if (!ShouldIncludeAssembly(dllFilePath))
                             continue;
 
-                        var assemblyInfo = CreateAssemblyInfo(dllFilePath, packageMappings);
+                        var assemblyInfo = CreateAssemblyInfo(dllFilePath, packageMappings, frameworkReferences);
                         if (assemblyInfo != null)
                             assemblyInfos.Add(assemblyInfo);
                     }
@@ -83,6 +85,25 @@ public sealed class AssemblyDiscoveryService(
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error searching directory: {Path}", searchPath);
+                }
+            }
+
+            var runtimeAssemblies = _runtimeAssemblyResolver.ResolveRuntimeAssemblyPaths(searchPaths, frameworkReferences);
+            foreach (var (frameworkName, dllPaths) in runtimeAssemblies)
+            {
+                foreach (string dllPath in dllPaths)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var metadata = _assemblyMetadataExtractor.ExtractMetadata(dllPath);
+                    if (metadata is null)
+                        continue;
+
+                    assemblyInfos.Add(new AssemblyInfo(
+                        frameworkName,
+                        metadata.AssemblyName,
+                        metadata.Version,
+                        dllPath));
                 }
             }
 
@@ -99,27 +120,33 @@ public sealed class AssemblyDiscoveryService(
         }
     }
 
-    private Dictionary<string, Package> DiscoverProjectAssets(string basePath)
+    private (Dictionary<string, Package> PackageMappings, HashSet<string> FrameworkReferences) DiscoverProjectAssets(string basePath)
     {
         var allPackageMappings = new Dictionary<string, Package>(StringComparer.OrdinalIgnoreCase);
+        var allFrameworkReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         string[] projectAssetsFiles = Directory.GetFiles(basePath, "project.assets.json", SearchOption.AllDirectories);
         _logger.LogDebug("Found {Count} project.assets.json files", projectAssetsFiles.Length);
 
         foreach (string projectAssetsFile in projectAssetsFiles)
         {
-            var mappings = _projectAssetsParser.ParseProjectAssets(projectAssetsFile);
-            if (mappings is null)
+            var data = _projectAssetsParser.ParseProjectAssets(projectAssetsFile);
+            if (data is null)
                 continue;
 
-            foreach ((string key, var value) in mappings)
+            foreach ((string key, var value) in data.PackageMappings)
                 allPackageMappings.TryAdd(key, value);
+
+            allFrameworkReferences.UnionWith(data.FrameworkReferences);
         }
 
-        return allPackageMappings;
+        return (allPackageMappings, allFrameworkReferences);
     }
 
-    private AssemblyInfo? CreateAssemblyInfo(string assemblyPath, Dictionary<string, Package> packageMappings)
+    private AssemblyInfo? CreateAssemblyInfo(
+        string assemblyPath,
+        Dictionary<string, Package> packageMappings,
+        HashSet<string> frameworkReferences)
     {
         try
         {
@@ -127,16 +154,32 @@ public sealed class AssemblyDiscoveryService(
             string fileName = fileInfo.Name;
             string assemblyNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
 
-            if (!packageMappings.TryGetValue(fileName, out var package))
-                throw new InvalidOperationException($"Unable to find package for {fileName} in package mappings");
+            if (packageMappings.TryGetValue(fileName, out var package))
+            {
+                var metadata = _assemblyMetadataExtractor.ExtractMetadata(assemblyPath);
+                return new AssemblyInfo(
+                    package.Name,
+                    metadata?.AssemblyName ?? assemblyNameWithoutExtension,
+                    metadata?.Version ?? package.Version,
+                    fileInfo.FullName);
+            }
 
-            var metadata = _assemblyMetadataExtractor.ExtractMetadata(assemblyPath);
+            if (frameworkReferences.Count > 0)
+            {
+                var metadata = _assemblyMetadataExtractor.ExtractMetadata(assemblyPath);
+                if (metadata is null)
+                    return null;
 
-            return new AssemblyInfo(
-                package.Name,
-                metadata?.AssemblyName ?? assemblyNameWithoutExtension,
-                metadata?.Version ?? package.Version,
-                fileInfo.FullName);
+                string frameworkName = ResolveFrameworkReference(assemblyNameWithoutExtension, frameworkReferences);
+                return new AssemblyInfo(
+                    frameworkName,
+                    metadata.AssemblyName,
+                    metadata.Version,
+                    fileInfo.FullName);
+            }
+
+            _logger.LogDebug("No package mapping or framework reference for {FileName}", fileName);
+            return null;
         }
         catch (Exception ex)
         {
@@ -145,7 +188,30 @@ public sealed class AssemblyDiscoveryService(
         }
     }
 
-    private bool ShouldIncludeAssembly(string assemblyPath)
+    private static string ResolveFrameworkReference(string assemblyName, HashSet<string> frameworkReferences)
+    {
+        if (assemblyName.StartsWith("Microsoft.AspNetCore", StringComparison.OrdinalIgnoreCase)
+            && frameworkReferences.Contains("Microsoft.AspNetCore.App"))
+            return "Microsoft.AspNetCore.App";
+
+        if (IsWindowsDesktopAssembly(assemblyName)
+            && frameworkReferences.Contains("Microsoft.WindowsDesktop.App"))
+            return "Microsoft.WindowsDesktop.App";
+
+        return frameworkReferences.Contains("Microsoft.NETCore.App")
+            ? "Microsoft.NETCore.App"
+            : frameworkReferences.First();
+    }
+
+    private static bool IsWindowsDesktopAssembly(string assemblyName) =>
+        assemblyName.StartsWith("System.Windows.", StringComparison.OrdinalIgnoreCase) ||
+        assemblyName.StartsWith("Microsoft.Win32.", StringComparison.OrdinalIgnoreCase) ||
+        assemblyName.Equals("WindowsBase", StringComparison.OrdinalIgnoreCase) ||
+        assemblyName.Equals("PresentationCore", StringComparison.OrdinalIgnoreCase) ||
+        assemblyName.Equals("PresentationFramework", StringComparison.OrdinalIgnoreCase) ||
+        assemblyName.Equals("WindowsFormsIntegration", StringComparison.OrdinalIgnoreCase);
+
+    private static bool ShouldIncludeAssembly(string assemblyPath)
     {
         if (assemblyPath.Contains($"{Path.DirectorySeparatorChar}ref{Path.DirectorySeparatorChar}", StringComparison.InvariantCultureIgnoreCase))
             return false;

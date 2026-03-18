@@ -29,10 +29,10 @@ Assembly and type data are cached in memory, so repeated tool calls against the 
 
 ### Available tools
 
-| Tool | Description |
-|------|-------------|
-| **search-types** | Search for .NET types across all assemblies in a project's dependency graph using wildcard patterns (e.g. `*HttpClient*`, `Microsoft.Extensions.*Options`). Returns type summaries including fully-qualified names. |
-| **decompile-type** | Decompile a .NET type into C# source code. Supports `full` mode (complete source with method bodies) and `signatures` mode (API surface only). Large outputs are automatically offloaded to a temporary file. |
+| Tool               | Description                                                                                                                                                                                                         |
+|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **search-types**   | Search for .NET types across all assemblies in a project's dependency graph using wildcard patterns (e.g. `*HttpClient*`, `Microsoft.Extensions.*Options`). Returns type summaries including fully-qualified names. |
+| **decompile-type** | Decompile a .NET type into C# source code. Supports `full` mode (complete source with method bodies) and `signatures` mode (API surface only). Large outputs are automatically offloaded to a temporary file.       |
 
 ## Installation
 
@@ -69,8 +69,8 @@ claude mcp add source-explorer -- dotnet dnx SourceExplorerMcp --yes
 
 ### Configuration
 
-| Environment Variable | Default | Description |
-|----------------------|---------|-------------|
+| Environment Variable               | Default | Description                                                                                               |
+|------------------------------------|---------|-----------------------------------------------------------------------------------------------------------|
 | `SOURCE_EXPLORER_MAX_INLINE_CHARS` | `10000` | Character threshold before decompiled source is offloaded to a temporary file instead of returned inline. |
 
 ## Changelog

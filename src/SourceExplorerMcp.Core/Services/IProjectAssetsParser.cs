@@ -5,9 +5,9 @@ namespace SourceExplorerMcp.Core.Services;
 public interface IProjectAssetsParser
 {
     /// <summary>
-    /// Parse a project.assets.json file and returns package to assembly mappings.
+    /// Parse a project.assets.json file and returns package to assembly mappings and framework references.
     /// </summary>
     /// <param name="projectAssetsPath">The file path to a project.assets.json file</param>
-    /// <returns>Dictionary mapping assembly file names (lowercase) to package information</returns>
-    Dictionary<string, Package>? ParseProjectAssets(string projectAssetsPath);
+    /// <returns>Package mappings and framework references, or null if the file cannot be parsed</returns>
+    ProjectAssetsData? ParseProjectAssets(string projectAssetsPath);
 }

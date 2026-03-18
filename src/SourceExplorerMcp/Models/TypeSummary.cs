@@ -11,7 +11,7 @@ public sealed record TypeSummary
     [Description("C# type declaration (e.g. 'public sealed class HttpClient').")]
     public required string Declaration { get; init; }
 
-    [Description("NuGet package name and version (e.g. 'Microsoft.NETCore.App.Ref v10.0.0').")]
+    [Description("Package or framework reference name and version (e.g. 'Newtonsoft.Json v13.0.3', 'Microsoft.NETCore.App v10.0.0').")]
     public required string Package { get; init; }
 
     public static TypeSummary FromTypeInfo(TypeInfo typeInfo) => new()
