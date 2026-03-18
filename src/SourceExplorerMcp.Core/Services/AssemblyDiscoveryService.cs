@@ -107,11 +107,17 @@ public sealed class AssemblyDiscoveryService(
                 }
             }
 
-            _logger.LogDebug("Discovered {Count} assemblies after filtering and metadata extraction", assemblyInfos.Count);
-            return assemblyInfos
+            var deduplicated = assemblyInfos
                 .OrderBy(a => a.PackageName)
                 .ThenBy(a => a.AssemblyName)
+                .DistinctBy(a => (a.PackageName, a.AssemblyName))
                 .ToList();
+
+            _logger.LogDebug(
+                "Discovered {Total} assemblies, {Unique} unique after deduplication",
+                assemblyInfos.Count, deduplicated.Count);
+
+            return deduplicated;
         }
         catch (Exception ex)
         {

@@ -115,6 +115,22 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DiscoverAssembliesAsync_NoDuplicateAssemblies()
+    {
+        string basePath = TestHelpers.FindRepoRoot();
+
+        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+
+        var duplicates = assemblies
+            .GroupBy(a => (a.PackageName, a.AssemblyName))
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key.PackageName}/{g.Key.AssemblyName} ({g.Count()}x)")
+            .ToList();
+
+        Assert.Empty(duplicates);
+    }
+
+    [Fact]
     public async Task DiscoverAssembliesAsync_CancellationThrowsOperationCancelled()
     {
         using var cts = new CancellationTokenSource();

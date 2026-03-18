@@ -18,7 +18,7 @@ public sealed class AssemblyMetadataExtractorTests
     [Fact]
     public void ExtractMetadata_ValidAssembly_ReturnsNameAndVersion()
     {
-        string assemblyPath = FindCoreAssemblyPath();
+        string assemblyPath = typeof(AssemblyMetadataExtractor).Assembly.Location;
 
         var result = _sut.ExtractMetadata(assemblyPath);
 
@@ -35,15 +35,5 @@ public sealed class AssemblyMetadataExtractorTests
         var result = _sut.ExtractMetadata(path);
 
         Assert.Null(result);
-    }
-
-    private static string FindCoreAssemblyPath()
-    {
-        string repoRoot = TestHelpers.FindRepoRoot();
-        string path = Path.Combine(repoRoot, "src", "SourceExplorerMcp.Core", "bin", "Debug", "net10.0", "SourceExplorerMcp.Core.dll");
-
-        Assert.True(File.Exists(path), $"Assembly not found at {path}. Run 'dotnet build' first.");
-
-        return path;
     }
 }
