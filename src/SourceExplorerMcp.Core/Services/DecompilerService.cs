@@ -15,7 +15,7 @@ public sealed class DecompilerService(
     private readonly ILogger<DecompilerService> _logger = logger;
     private readonly ITypeSearchService _typeSearchService = typeSearchService;
 
-    public async Task<DecompilationResult?> DecompileTypeAsync(string basePath, string fullTypeName, DecompilerOptions? options = null,
+    public async Task<DecompilationResult> DecompileTypeAsync(string basePath, string fullTypeName, DecompilerOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
@@ -25,12 +25,17 @@ public sealed class DecompilerService(
 
         _logger.LogInformation("Decompiling type '{TypeName}' from path: {Path}", fullTypeName, basePath);
 
-        var typeInfo = await _typeSearchService.GetTypeInfoAsync(basePath, fullTypeName, cancellationToken);
-        if (typeInfo is null)
+        var lookupResult = await _typeSearchService.GetTypeInfoAsync(basePath, fullTypeName, cancellationToken);
+        if (lookupResult.Type is null)
         {
             _logger.LogWarning("Type not found: {TypeName}", fullTypeName);
-            return null;
+            return new DecompilationResult(fullTypeName, string.Empty, null)
+            {
+                Diagnostics = lookupResult.Diagnostics
+            };
         }
+
+        var typeInfo = lookupResult.Type;
 
         try
         {

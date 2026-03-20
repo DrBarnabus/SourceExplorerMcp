@@ -8,10 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 dotnet restore                    # Restore packages (use --locked-mode in CI)
 dotnet build                      # Build all projects
 dotnet pack src/SourceExplorerMcp # Pack as dotnet tool
+dotnet test                       # Run tests
 dotnet run --project src/SourceExplorerMcp -- [args]  # Run the MCP server locally
 ```
 
-No tests exist yet. Lock files are enabled; update with `dotnet restore --force-evaluate`.
+Lock files are enabled; update with `dotnet restore --force-evaluate`.
 
 ## Project Overview
 

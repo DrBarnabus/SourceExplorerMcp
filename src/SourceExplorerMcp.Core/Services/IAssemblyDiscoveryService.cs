@@ -7,5 +7,5 @@ public interface IAssemblyDiscoveryService
     /// <summary>
     /// Gets all discovered assemblies, using a cache if possible.
     /// </summary>
-    Task<List<AssemblyInfo>> DiscoverAssembliesAsync(string basePath, CancellationToken cancellationToken = default);
+    Task<DiscoveryResult> DiscoverAssembliesAsync(string basePath, CancellationToken cancellationToken = default);
 }

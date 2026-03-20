@@ -4,7 +4,7 @@ namespace SourceExplorerMcp.Core.Services;
 
 public interface IDecompilerService
 {
-    Task<DecompilationResult?> DecompileTypeAsync(
+    Task<DecompilationResult> DecompileTypeAsync(
         string basePath,
         string fullTypeName,
         DecompilerOptions? options = null,

@@ -41,8 +41,11 @@ public sealed class DecompileTypeTool(
         };
 
         var result = await _decompilerService.DecompileTypeAsync(basePath, input.FullName, options, cancellationToken);
-        if (result is null)
-            return new DecompileTypeOutput();
+        if (result.Type is null)
+            return new DecompileTypeOutput
+            {
+                Diagnostics = result.Diagnostics is { Count: > 0 } ? result.Diagnostics : null
+            };
 
         var threshold = GetMaxInlineChars();
         var sourceCode = result.SourceCode;
@@ -146,6 +149,9 @@ public sealed record DecompileTypeOutput
 
     [Description("Decompiled source, or null if not found.")]
     public DecompiledSource? Source { get; init; }
+
+    [Description("Diagnostic messages explaining why the type could not be found, such as the project not being built.")]
+    public List<string>? Diagnostics { get; init; }
 }
 
 public sealed record DecompiledSource

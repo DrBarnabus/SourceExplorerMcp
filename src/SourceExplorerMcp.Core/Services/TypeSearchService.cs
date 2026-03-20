@@ -44,7 +44,7 @@ public sealed class TypeSearchService(
         Unknown
     }
 
-    public async Task<List<TypeInfo>> SearchTypesAsync(string basePath, string searchPattern, CancellationToken cancellationToken = default)
+    public async Task<TypeSearchResult> SearchTypesAsync(string basePath, string searchPattern, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(searchPattern);
@@ -52,7 +52,7 @@ public sealed class TypeSearchService(
         string normalisedPath = Path.GetFullPath(basePath);
         _logger.LogInformation("Searching for types matching '{Pattern}' in: {Path}", searchPattern, basePath);
 
-        var allTypes = await GetAllTypesAsync(normalisedPath, cancellationToken);
+        var (allTypes, diagnostics) = await GetAllTypesAsync(normalisedPath, cancellationToken);
 
         var regex = WildcardToRegex(searchPattern);
 
@@ -64,10 +64,10 @@ public sealed class TypeSearchService(
 
         _logger.LogInformation("Found {Count} types matching pattern '{Pattern}'", matchingTypes.Count, searchPattern);
 
-        return matchingTypes;
+        return new TypeSearchResult(matchingTypes, diagnostics);
     }
 
-    public async Task<TypeInfo?> GetTypeInfoAsync(string basePath, string fullTypeName, CancellationToken cancellationToken = default)
+    public async Task<TypeLookupResult> GetTypeInfoAsync(string basePath, string fullTypeName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(basePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(fullTypeName);
@@ -75,30 +75,32 @@ public sealed class TypeSearchService(
         string normalisedPath = Path.GetFullPath(basePath);
         _logger.LogInformation("Searching for type matching exactly '{FullTypeName}' in: {Path}", fullTypeName, basePath);
 
-        var allTypes = await GetAllTypesAsync(normalisedPath, cancellationToken);
-        return allTypes.FirstOrDefault(t => t.FullName.Equals(fullTypeName, StringComparison.OrdinalIgnoreCase));
+        var (allTypes, diagnostics) = await GetAllTypesAsync(normalisedPath, cancellationToken);
+        var type = allTypes.FirstOrDefault(t => t.FullName.Equals(fullTypeName, StringComparison.OrdinalIgnoreCase));
+        return new TypeLookupResult(type, diagnostics);
     }
 
-    private async Task<List<TypeInfo>> GetAllTypesAsync(string normalisedPath, CancellationToken cancellationToken)
+    private async Task<(List<TypeInfo> Types, List<string> Diagnostics)> GetAllTypesAsync(string normalisedPath, CancellationToken cancellationToken)
     {
         string cacheKey = GetCacheKey(normalisedPath);
 
         if (_cache.TryGetValue<List<TypeInfo>>(cacheKey, out var cachedTypes) && cachedTypes is not null)
         {
             _logger.LogDebug("Retrieved {Count} types from cache for path: {Path}", cachedTypes.Count, normalisedPath);
-            return cachedTypes;
+            return (cachedTypes, []);
         }
 
         _logger.LogInformation("Building type index for path: {Path}", normalisedPath);
 
-        var assemblies = await _assemblyDiscoveryService.DiscoverAssembliesAsync(normalisedPath, cancellationToken);
+        var discoveryResult = await _assemblyDiscoveryService.DiscoverAssembliesAsync(normalisedPath, cancellationToken);
 
-        var allTypes = await Task.Run(() => ExtractTypesFromAssemblies(assemblies, cancellationToken), cancellationToken);
+        var allTypes = await Task.Run(() => ExtractTypesFromAssemblies(discoveryResult.Assemblies, cancellationToken), cancellationToken);
 
-        _cache.Set(cacheKey, allTypes);
+        if (allTypes.Count > 0)
+            _cache.Set(cacheKey, allTypes);
 
-        _logger.LogInformation("Indexed {Count} types from {AssemblyCount} assemblies", allTypes.Count, assemblies.Count);
-        return allTypes;
+        _logger.LogInformation("Indexed {Count} types from {AssemblyCount} assemblies", allTypes.Count, discoveryResult.Assemblies.Count);
+        return (allTypes, discoveryResult.Diagnostics);
     }
 
     private List<TypeInfo> ExtractTypesFromAssemblies(List<AssemblyInfo> assemblies, CancellationToken cancellationToken)

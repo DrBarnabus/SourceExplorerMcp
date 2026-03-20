@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
 using SourceExplorerMcp.Core.Models;
 using SourceExplorerMcp.Core.Services;
 
@@ -31,9 +30,9 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     {
         string basePath = TestHelpers.FindRepoRoot();
 
-        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+        var result = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
 
-        Assert.Contains(assemblies, a => a.PackageName == "ICSharpCode.Decompiler");
+        Assert.Contains(result.Assemblies, a => a.PackageName == "ICSharpCode.Decompiler");
     }
 
     [Fact]
@@ -41,9 +40,9 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     {
         string basePath = TestHelpers.FindRepoRoot();
 
-        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+        var result = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
 
-        Assert.Contains(assemblies, a => a.PackageName == "Microsoft.NETCore.App");
+        Assert.Contains(result.Assemblies, a => a.PackageName == "Microsoft.NETCore.App");
     }
 
     [Fact]
@@ -51,9 +50,9 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     {
         string basePath = TestHelpers.FindRepoRoot();
 
-        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+        var result = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
 
-        Assert.Contains(assemblies, a => a.AssemblyName == "System.Net.Http");
+        Assert.Contains(result.Assemblies, a => a.AssemblyName == "System.Net.Http");
     }
 
     [Fact]
@@ -93,14 +92,14 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     {
         string basePath = TestHelpers.FindRepoRoot();
 
-        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+        var result = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
 
-        var expected = assemblies
+        var expected = result.Assemblies
             .OrderBy(a => a.PackageName)
             .ThenBy(a => a.AssemblyName)
             .ToList();
 
-        Assert.Equal(expected, assemblies);
+        Assert.Equal(expected, result.Assemblies);
     }
 
     [Fact]
@@ -108,9 +107,9 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     {
         string basePath = TestHelpers.FindRepoRoot();
 
-        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+        var result = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(assemblies, a =>
+        Assert.DoesNotContain(result.Assemblies, a =>
             a.FilePath.Contains(Path.DirectorySeparatorChar + "ref" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -119,9 +118,9 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
     {
         string basePath = TestHelpers.FindRepoRoot();
 
-        var assemblies = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
+        var result = await _sut.DiscoverAssembliesAsync(basePath, TestContext.Current.CancellationToken);
 
-        var duplicates = assemblies
+        var duplicates = result.Assemblies
             .GroupBy(a => (a.PackageName, a.AssemblyName))
             .Where(g => g.Count() > 1)
             .Select(g => $"{g.Key.PackageName}/{g.Key.AssemblyName} ({g.Count()}x)")
@@ -139,6 +138,44 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
         string basePath = TestHelpers.FindRepoRoot();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => _sut.DiscoverAssembliesAsync(basePath, cts.Token));
+    }
+
+    [Fact]
+    public async Task DiscoverAssembliesAsync_EmptyDirectory_ReturnsDiagnostics()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), $"source-explorer-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var result = await _sut.DiscoverAssembliesAsync(tempDir, TestContext.Current.CancellationToken);
+
+            Assert.Empty(result.Assemblies);
+            Assert.NotEmpty(result.Diagnostics);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DiscoverAssembliesAsync_EmptyDirectory_IsNotCached()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), $"source-explorer-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var first = await _sut.DiscoverAssembliesAsync(tempDir, TestContext.Current.CancellationToken);
+            var second = await _sut.DiscoverAssembliesAsync(tempDir, TestContext.Current.CancellationToken);
+
+            Assert.NotSame(first, second);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
     }
 
     public void Dispose() => _cache.Dispose();

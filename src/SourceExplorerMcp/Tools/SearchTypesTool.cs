@@ -23,8 +23,11 @@ public sealed class SearchTypesTool(
         string basePath = input.ProjectBasePath ?? Environment.CurrentDirectory;
         _logger.LogInformation("Searching types in assemblies from {Path}", basePath);
 
-        var matchingTypes = await _typeSearchService.SearchTypesAsync(basePath, input.SearchPattern, cancellationToken);
-        return new SearchTypesOutput(matchingTypes.Select(TypeSummary.FromTypeInfo).ToList());
+        var result = await _typeSearchService.SearchTypesAsync(basePath, input.SearchPattern, cancellationToken);
+        return new SearchTypesOutput(result.Types.Select(TypeSummary.FromTypeInfo).ToList())
+        {
+            Diagnostics = result.Diagnostics is { Count: > 0 } ? result.Diagnostics : null
+        };
     }
 }
 
@@ -37,4 +40,8 @@ public sealed record SearchTypesInput
     public string? ProjectBasePath { get; init; }
 }
 
-public sealed record SearchTypesOutput(List<TypeSummary> Types);
+public sealed record SearchTypesOutput(List<TypeSummary> Types)
+{
+    [Description("Diagnostic messages explaining why results may be empty or incomplete, such as the project not being built.")]
+    public List<string>? Diagnostics { get; init; }
+}

@@ -50,7 +50,7 @@ public sealed class DecompilerServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DecompileTypeAsync_NonExistentType_ReturnsNull()
+    public async Task DecompileTypeAsync_NonExistentType_ReturnsEmptyResultWithNullType()
     {
         string basePath = TestHelpers.FindRepoRoot();
 
@@ -59,7 +59,9 @@ public sealed class DecompilerServiceTests : IDisposable
             "NonExistent.Type.Name",
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Null(result.Type);
+        Assert.Empty(result.SourceCode);
     }
 
     [Fact]
