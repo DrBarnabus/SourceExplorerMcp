@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using SourceExplorerMcp.Core.Caching;
 using SourceExplorerMcp.Core.Models;
 using TypeInfo = SourceExplorerMcp.Core.Models.TypeInfo;
 
@@ -82,9 +83,10 @@ public sealed class TypeSearchService(
 
     private async Task<(List<TypeInfo> Types, List<string> Diagnostics)> GetAllTypesAsync(string normalisedPath, CancellationToken cancellationToken)
     {
-        string cacheKey = GetCacheKey(normalisedPath);
+        var discoveryResult = await _assemblyDiscoveryService.DiscoverAssembliesAsync(normalisedPath, cancellationToken);
 
-        if (_cache.TryGetValue<List<TypeInfo>>(cacheKey, out var cachedTypes) && cachedTypes is not null)
+        string cacheKey = GetCacheKey(normalisedPath);
+        if (_cache.TryGetValid<List<TypeInfo>>(cacheKey, discoveryResult.Fingerprint, out var cachedTypes))
         {
             _logger.LogDebug("Retrieved {Count} types from cache for path: {Path}", cachedTypes.Count, normalisedPath);
             return (cachedTypes, []);
@@ -92,12 +94,10 @@ public sealed class TypeSearchService(
 
         _logger.LogInformation("Building type index for path: {Path}", normalisedPath);
 
-        var discoveryResult = await _assemblyDiscoveryService.DiscoverAssembliesAsync(normalisedPath, cancellationToken);
-
         var allTypes = await Task.Run(() => ExtractTypesFromAssemblies(discoveryResult.Assemblies, cancellationToken), cancellationToken);
 
         if (allTypes.Count > 0)
-            _cache.Set(cacheKey, allTypes);
+            _cache.SetWithFingerprint(cacheKey, allTypes, discoveryResult.Fingerprint);
 
         _logger.LogInformation("Indexed {Count} types from {AssemblyCount} assemblies", allTypes.Count, discoveryResult.Assemblies.Count);
         return (allTypes, discoveryResult.Diagnostics);

@@ -17,12 +17,15 @@ public sealed class DecompilerServiceTests : IDisposable
         var metadataExtractor = new AssemblyMetadataExtractor(NullLogger<AssemblyMetadataExtractor>.Instance);
         var runtimeResolver = new RuntimeAssemblyResolver(NullLogger<RuntimeAssemblyResolver>.Instance);
 
+        var structureService = new ProjectStructureService(NullLogger<ProjectStructureService>.Instance);
+
         var discoveryService = new AssemblyDiscoveryService(
             NullLogger<AssemblyDiscoveryService>.Instance,
             parser,
             metadataExtractor,
             runtimeResolver,
-            _cache);
+            _cache,
+            structureService);
 
         var typeSearchService = new TypeSearchService(
             NullLogger<TypeSearchService>.Instance,

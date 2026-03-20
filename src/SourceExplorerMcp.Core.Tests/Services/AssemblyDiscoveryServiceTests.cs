@@ -16,13 +16,15 @@ public sealed class AssemblyDiscoveryServiceTests : IDisposable
         var parser = new ProjectAssetsParser(NullLogger<ProjectAssetsParser>.Instance);
         var metadataExtractor = new AssemblyMetadataExtractor(NullLogger<AssemblyMetadataExtractor>.Instance);
         var runtimeResolver = new RuntimeAssemblyResolver(NullLogger<RuntimeAssemblyResolver>.Instance);
+        var structureService = new ProjectStructureService(NullLogger<ProjectStructureService>.Instance);
 
         _sut = new AssemblyDiscoveryService(
             NullLogger<AssemblyDiscoveryService>.Instance,
             parser,
             metadataExtractor,
             runtimeResolver,
-            _cache);
+            _cache,
+            structureService);
     }
 
     [Fact]

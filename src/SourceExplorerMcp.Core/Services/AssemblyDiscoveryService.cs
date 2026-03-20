@@ -1,5 +1,6 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using SourceExplorerMcp.Core.Caching;
 using SourceExplorerMcp.Core.Models;
 
 namespace SourceExplorerMcp.Core.Services;
@@ -9,7 +10,8 @@ public sealed class AssemblyDiscoveryService(
     IProjectAssetsParser projectAssetsParser,
     IAssemblyMetadataExtractor assemblyMetadataExtractor,
     IRuntimeAssemblyResolver runtimeAssemblyResolver,
-    IMemoryCache cache)
+    IMemoryCache cache,
+    IProjectStructureService structureService)
     : IAssemblyDiscoveryService
 {
     private const string CacheKeyPrefix = "assemblies:";
@@ -19,6 +21,7 @@ public sealed class AssemblyDiscoveryService(
     private readonly IAssemblyMetadataExtractor _assemblyMetadataExtractor = assemblyMetadataExtractor;
     private readonly IRuntimeAssemblyResolver _runtimeAssemblyResolver = runtimeAssemblyResolver;
     private readonly IMemoryCache _cache = cache;
+    private readonly IProjectStructureService _structureService = structureService;
 
     public async Task<DiscoveryResult> DiscoverAssembliesAsync(string basePath, CancellationToken cancellationToken = default)
     {
@@ -29,8 +32,9 @@ public sealed class AssemblyDiscoveryService(
 
         string normalisedPath = Path.GetFullPath(basePath);
         string cacheKey = GetCacheKey(normalisedPath);
+        var structure = _structureService.Discover(normalisedPath);
 
-        if (_cache.TryGetValue<DiscoveryResult>(cacheKey, out var cached) && cached is not null)
+        if (_cache.TryGetValid<DiscoveryResult>(cacheKey, structure.Fingerprint, out var cached))
         {
             _logger.LogDebug("Retrieved {Count} assemblies from cache for {Path}", cached.Assemblies.Count, normalisedPath);
             return cached;
@@ -38,34 +42,26 @@ public sealed class AssemblyDiscoveryService(
 
         _logger.LogInformation("Discovering assemblies in {Path}", normalisedPath);
 
-        var result = await Task.Run(() => DiscoverAssembliesInternal(normalisedPath, cancellationToken), cancellationToken);
+        var result = await Task.Run(() => DiscoverAssembliesInternal(normalisedPath, structure, cancellationToken), cancellationToken);
 
         if (result.Assemblies.Count > 0)
-            _cache.Set(cacheKey, result);
+            _cache.SetWithFingerprint(cacheKey, result, structure.Fingerprint);
 
         _logger.LogInformation("Discovered {Count} assemblies for {Path}", result.Assemblies.Count, normalisedPath);
         return result;
     }
 
-    private DiscoveryResult DiscoverAssembliesInternal(string basePath, CancellationToken cancellationToken = default)
+    private DiscoveryResult DiscoverAssembliesInternal(string basePath, ProjectStructure structure, CancellationToken cancellationToken = default)
     {
         var assemblyInfos = new List<AssemblyInfo>();
 
         try
         {
-            var searchPaths = new List<string>();
-            string[] binDirectories = Directory.GetDirectories(basePath, "bin", SearchOption.AllDirectories);
-            searchPaths.AddRange(binDirectories);
+            _logger.LogDebug("Found {Count} bin directories to search", structure.BinDirectories.Count);
 
-            if (Path.GetFileName(basePath).Equals("bin", StringComparison.OrdinalIgnoreCase))
-                searchPaths.Add(basePath);
+            var (packageMappings, frameworkReferences) = ParseProjectAssets(structure.ProjectAssetsFiles);
 
-            bool hasBinDirectories = searchPaths.Count > 0;
-            _logger.LogDebug("Found {Count} bin directories to search", searchPaths.Count);
-
-            var (packageMappings, frameworkReferences, hasProjectAssets) = DiscoverProjectAssets(basePath);
-
-            foreach (string searchPath in searchPaths)
+            foreach (string searchPath in structure.BinDirectories)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -90,7 +86,7 @@ public sealed class AssemblyDiscoveryService(
                 }
             }
 
-            var runtimeAssemblies = _runtimeAssemblyResolver.ResolveRuntimeAssemblyPaths(searchPaths, frameworkReferences);
+            var runtimeAssemblies = _runtimeAssemblyResolver.ResolveRuntimeAssemblyPaths(structure.BinDirectories, frameworkReferences);
             foreach (var (frameworkName, dllPaths) in runtimeAssemblies)
             {
                 foreach (string dllPath in dllPaths)
@@ -120,17 +116,17 @@ public sealed class AssemblyDiscoveryService(
                 assemblyInfos.Count, deduplicated.Count);
 
             if (deduplicated.Count > 0)
-                return new DiscoveryResult(deduplicated, []);
+                return new DiscoveryResult(deduplicated, [], structure.Fingerprint);
 
             var diagnostics = new List<string>();
-            if (!hasProjectAssets)
+            if (structure.ProjectAssetsFiles.Count == 0)
                 diagnostics.Add($"No project.assets.json found under '{basePath}'. Run 'dotnet restore' to generate the project dependency graph.");
-            if (!hasBinDirectories)
+            if (structure.BinDirectories.Count == 0)
                 diagnostics.Add($"No bin/ directories found under '{basePath}'. Run 'dotnet build' to compile the project and its dependencies.");
-            else if (hasProjectAssets)
+            else if (structure.ProjectAssetsFiles.Count > 0)
                 diagnostics.Add("No assemblies matched the project dependency graph. The project may need to be rebuilt.");
 
-            return new DiscoveryResult(deduplicated, diagnostics);
+            return new DiscoveryResult(deduplicated, diagnostics, structure.Fingerprint);
         }
         catch (Exception ex)
         {
@@ -139,13 +135,12 @@ public sealed class AssemblyDiscoveryService(
         }
     }
 
-    private (Dictionary<string, Package> PackageMappings, HashSet<string> FrameworkReferences, bool HasProjectAssets) DiscoverProjectAssets(string basePath)
+    private (Dictionary<string, Package> PackageMappings, HashSet<string> FrameworkReferences) ParseProjectAssets(IReadOnlyList<string> projectAssetsFiles)
     {
         var allPackageMappings = new Dictionary<string, Package>(StringComparer.OrdinalIgnoreCase);
         var allFrameworkReferences = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        string[] projectAssetsFiles = Directory.GetFiles(basePath, "project.assets.json", SearchOption.AllDirectories);
-        _logger.LogDebug("Found {Count} project.assets.json files", projectAssetsFiles.Length);
+        _logger.LogDebug("Found {Count} project.assets.json files", projectAssetsFiles.Count);
 
         foreach (string projectAssetsFile in projectAssetsFiles)
         {
@@ -159,7 +154,7 @@ public sealed class AssemblyDiscoveryService(
             allFrameworkReferences.UnionWith(data.FrameworkReferences);
         }
 
-        return (allPackageMappings, allFrameworkReferences, projectAssetsFiles.Length > 0);
+        return (allPackageMappings, allFrameworkReferences);
     }
 
     private AssemblyInfo? CreateAssemblyInfo(
