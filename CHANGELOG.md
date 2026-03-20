@@ -3,6 +3,14 @@
 All notable changes to this project will be automatically documented in this file.
 
 
+### [1.0.2](https://github.com/DrBarnabus/SourceExplorerMcp/compare/v1.0.1...v1.0.2) (2026-03-20)
+
+
+### Bug Fixes
+
+* invalidate stale cache entries using filesystem fingerprinting ([0723a99](https://github.com/DrBarnabus/SourceExplorerMcp/commit/0723a99f47a6aca820b75cb06cbb4461d19d366f)), closes [#4](https://github.com/DrBarnabus/SourceExplorerMcp/issues/4)
+* return diagnostic messages when no assemblies are discovered ([eab8734](https://github.com/DrBarnabus/SourceExplorerMcp/commit/eab87349036e6223f46a5bde068b3b397060f985)), closes [#3](https://github.com/DrBarnabus/SourceExplorerMcp/issues/3)
+
 ### [1.0.1](https://github.com/DrBarnabus/SourceExplorerMcp/compare/v1.0.0...v1.0.1) (2026-03-18)
 
 
